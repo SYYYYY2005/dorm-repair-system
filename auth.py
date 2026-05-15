@@ -16,10 +16,12 @@ def register():
 
     # 检查用户名是否已存在
     if User.query.filter_by(username=username).first():
-        return jsonify({"error": "用户名已存在"}), 400
+        return jsonify({"error": "用户名或邮箱已注册"}), 400
+    if len(password) < 6 or len(password) > 20:
+        return jsonify({"error": "密码长度应为6-20位"}), 400
 
     # 加密密码
-    salt = bcrypt.gensalt()
+    salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     new_user = User(username=username, password_hash=hashed.decode('utf-8'), role=role)
     db.session.add(new_user)
