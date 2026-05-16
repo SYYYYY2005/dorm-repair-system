@@ -48,12 +48,18 @@ class RepairOrderRepository:
             query = query.filter_by(status=status)
         return query.order_by(RepairOrder.created_at.desc()).all()
 
+    # ========== 修改：增加乐观锁支持 ==========
     @staticmethod
-    def update_status(order_id, new_status):
+    def update_status(order_id, new_status, version=None):
         order = RepairOrder.query.get(order_id)
-        if order:
-            order.status = new_status
-            db.session.commit()
+        if not order:
+            return None
+        # 如果传入了版本号，则检查版本
+        if version is not None and order.version != version:
+            return None  # 表示冲突
+        order.status = new_status
+        order.version += 1   # 每次更新版本号加1
+        db.session.commit()
         return order
 
     @staticmethod

@@ -93,6 +93,7 @@ def get_all_repairs():
     } for o in orders]
     return api_response(data=result)
 
+# ==================== 修改的部分（增加输入校验） ====================
 @app.route('/api/repairs/<int:order_id>/status', methods=['PUT'])
 @jwt_required
 def update_repair_status(order_id):
@@ -100,8 +101,13 @@ def update_repair_status(order_id):
     current_user_id = int(get_jwt_identity())
     data = request.get_json()
     new_status = data.get('status')
+    
+    # 输入校验（新增）
     if not new_status:
         return api_response(code=400, error="缺少status字段")
+    if new_status not in ['processing', 'completed']:
+        return api_response(code=400, error="无效状态值，只允许 processing 或 completed")
+    
     from models import User
     user = User.query.get(current_user_id)
     if not user or user.role != 'repairman':
@@ -110,6 +116,7 @@ def update_repair_status(order_id):
     if error:
         return api_response(code=400, error=error)
     return api_response(message="状态更新成功")
+# ==================== 修改结束 ====================
 
 @app.route('/api/repairs/<int:order_id>/assign', methods=['PUT'])
 @jwt_required
