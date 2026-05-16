@@ -48,7 +48,7 @@ def login():
     if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
         return jsonify({"error": "用户名或密码错误"}), 401
 
-    access_token = create_access_token(identity=user.id)
+    access_token = create_access_token(identity=str(user.id))
     return jsonify({
         "access_token": access_token,
         "user_id": user.id,
