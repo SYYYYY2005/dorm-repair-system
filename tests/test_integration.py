@@ -26,7 +26,7 @@ def test_full_flow(client):
     res = client.post('/api/repairs', headers={'Authorization': f'Bearer {stu_token}'}, json={'room_number':'101','description':'灯坏了'})
     order_id = res.json['data']['id']
 
-    # 4. 管理员登录，分配工单给维修工（需要先获取维修工ID）
+    # 4. 管理员登录，分配工单给维修工
     res = client.post('/api/login', json={'username':'adm','password':'123'})
     adm_token = res.json['access_token']
     repairman = User.query.filter_by(username='rep').first()
