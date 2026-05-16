@@ -22,7 +22,7 @@ app.register_blueprint(auth_bp)
 @app.route('/api/repairs', methods=['POST'])
 @jwt_required()
 def create_repair():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     data = request.get_json()
     order, error = RepairService.create_repair(current_user_id, data)
     if error:
@@ -32,7 +32,7 @@ def create_repair():
 @app.route('/api/repairs', methods=['GET'])
 @jwt_required()
 def get_repairs():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     orders = RepairService.get_repairs_by_student(current_user_id)
     result = [{"id": o.id, "room": o.room_number, "desc": o.description, "status": o.status, "created_at": o.created_at.isoformat()} for o in orders]
     return api_response(data=result)
