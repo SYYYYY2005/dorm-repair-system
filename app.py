@@ -136,8 +136,12 @@ def assign_repair_order(order_id):
 @jwt_required
 def create_evaluation(order_id):
     from flask_jwt_extended import get_jwt_identity
-    from services import EvaluationService
+    from models import User
     current_user_id = int(get_jwt_identity())
+    # 角色校验：只有学生可以评价
+    user = User.query.get(current_user_id)
+    if not user or user.role != 'student':
+        return api_response(code=403, error="只有学生可以评价")
     data = request.get_json()
     eval_obj, error = EvaluationService.create_evaluation(order_id, current_user_id, data)
     if error:
