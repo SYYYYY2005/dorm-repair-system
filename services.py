@@ -1,7 +1,7 @@
 import re
 import logging
-from models import RepairOrder
-from repositories import RepairOrderRepository, UserRepository
+from models import RepairOrder, Evaluation
+from repositories import RepairOrderRepository, UserRepository, EvaluationRepository
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -48,7 +48,6 @@ class RepairService:
     def get_all_repairs(status=None):
         return RepairOrderRepository.get_all(status)
 
-    # ========== 修改：增加乐观锁支持 ==========
     @staticmethod
     def update_repair_status(order_id, repairman_id, new_status):
         # 获取工单并保存当前版本号（乐观锁）
@@ -99,3 +98,23 @@ class RepairService:
         logging.info(f"管理员 {admin_id} 将工单 {order_id} 分配给维修工 {repairman_id}（原维修工: {old_repairman_id}）")
         
         return order, None
+
+
+# ========== 新增：评价模块 Service ==========
+class EvaluationService:
+    @staticmethod
+    def create_evaluation(order_id, student_id, data):
+        from models import RepairOrder
+        order = RepairOrder.query.get(order_id)
+        if not order or order.student_id != student_id:
+            return None, "工单不存在或无权限"
+        if order.status != 'completed':
+            return None, "只有已完成的工单才能评价"
+        if Evaluation.query.filter_by(order_id=order_id).first():
+            return None, "该工单已评价过"
+        score = data.get('score')
+        if not isinstance(score, int) or score < 1 or score > 5:
+            return None, "评分必须是1-5之间的整数"
+        comment = data.get('comment', '')
+        evaluation = Evaluation(order_id=order_id, score=score, comment=comment)
+        return EvaluationRepository.add(evaluation), None

@@ -1,4 +1,4 @@
-from models import db, User, RepairOrder
+from models import db, User, RepairOrder, Evaluation
 
 class UserRepository:
     @staticmethod
@@ -14,6 +14,7 @@ class UserRepository:
         db.session.add(user)
         db.session.commit()
         return user
+
 
 class RepairOrderRepository:
     # ========== 报修模块已有方法 ==========
@@ -48,17 +49,17 @@ class RepairOrderRepository:
             query = query.filter_by(status=status)
         return query.order_by(RepairOrder.created_at.desc()).all()
 
-    # ========== 修改：增加乐观锁支持 ==========
     @staticmethod
     def update_status(order_id, new_status, version=None):
+        """更新状态，支持乐观锁"""
         order = RepairOrder.query.get(order_id)
         if not order:
             return None
-        # 如果传入了版本号，则检查版本
+        # 如果传入了版本号，则检查版本（乐观锁）
         if version is not None and order.version != version:
             return None  # 表示冲突
         order.status = new_status
-        order.version += 1   # 每次更新版本号加1
+        order.version += 1  # 每次更新版本号加1
         db.session.commit()
         return order
 
@@ -69,3 +70,16 @@ class RepairOrderRepository:
             order.repairman_id = repairman_id
             db.session.commit()
         return order
+
+
+# ========== 新增：评价模块 Repository ==========
+class EvaluationRepository:
+    @staticmethod
+    def add(evaluation):
+        db.session.add(evaluation)
+        db.session.commit()
+        return evaluation
+
+    @staticmethod
+    def get_by_order(order_id):
+        return Evaluation.query.filter_by(order_id=order_id).first()
