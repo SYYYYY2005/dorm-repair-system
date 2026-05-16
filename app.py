@@ -16,7 +16,6 @@ jwt = JWTManager(app)
 app.register_blueprint(auth_bp)
 
 # ==================== 报修模块 ====================
-
 @app.route('/api/repairs', methods=['POST'])
 @jwt_required
 def create_repair():
@@ -51,6 +50,84 @@ def get_repairs():
     except Exception as e:
         app.logger.error(f"获取报修列表失败: {e}")
         return api_response(code=500, error="系统繁忙，请稍后重试")
+
+# ==================== 工单模块 ====================
+@app.route('/api/repairs/assigned', methods=['GET'])
+@jwt_required
+def get_assigned_repairs():
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    from models import User
+    user = User.query.get(current_user_id)
+    if not user or user.role != 'repairman':
+        return api_response(code=403, error="权限不足")
+    orders = RepairService.get_repairs_for_repairman(current_user_id)
+    result = [{
+        "id": o.id,
+        "room": o.room_number,
+        "description": o.description,
+        "status": o.status,
+        "created_at": o.created_at.isoformat()
+    } for o in orders]
+    return api_response(data=result)
+
+@app.route('/api/repairs/all', methods=['GET'])
+@jwt_required
+def get_all_repairs():
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    from models import User
+    user = User.query.get(current_user_id)
+    if not user or user.role != 'admin':
+        return api_response(code=403, error="权限不足")
+    status = request.args.get('status')
+    orders = RepairService.get_all_repairs(status)
+    result = [{
+        "id": o.id,
+        "student_id": o.student_id,
+        "room": o.room_number,
+        "description": o.description,
+        "status": o.status,
+        "repairman_id": o.repairman_id,
+        "created_at": o.created_at.isoformat()
+    } for o in orders]
+    return api_response(data=result)
+
+@app.route('/api/repairs/<int:order_id>/status', methods=['PUT'])
+@jwt_required
+def update_repair_status(order_id):
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json()
+    new_status = data.get('status')
+    if not new_status:
+        return api_response(code=400, error="缺少status字段")
+    from models import User
+    user = User.query.get(current_user_id)
+    if not user or user.role != 'repairman':
+        return api_response(code=403, error="权限不足")
+    order, error = RepairService.update_repair_status(order_id, current_user_id, new_status)
+    if error:
+        return api_response(code=400, error=error)
+    return api_response(message="状态更新成功")
+
+@app.route('/api/repairs/<int:order_id>/assign', methods=['PUT'])
+@jwt_required
+def assign_repair_order(order_id):
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json()
+    repairman_id = data.get('repairman_id')
+    if not repairman_id:
+        return api_response(code=400, error="缺少repairman_id")
+    from models import User
+    user = User.query.get(current_user_id)
+    if not user or user.role != 'admin':
+        return api_response(code=403, error="权限不足")
+    order, error = RepairService.assign_repair_order(order_id, current_user_id, repairman_id)
+    if error:
+        return api_response(code=400, error=error)
+    return api_response(message="分配成功")
 
 # ==================== 错误处理 ====================
 @app.errorhandler(404)
