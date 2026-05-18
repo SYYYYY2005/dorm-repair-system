@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生端 - 宿舍报修系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .container { max-width: 1200px; margin-top: 20px; }
+        .status-badge { padding: 3px 8px; border-radius: 20px; font-size: 0.8rem; font-weight: normal; }
+        .status-pending { background-color: #ffc107; color: #000; }
+        .status-processing { background-color: #17a2b8; color: #fff; }
+        .status-completed { background-color: #28a745; color: #fff; }
+        .table th { background-color: #343a40; color: white; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <nav class="navbar navbar-light bg-light shadow-sm rounded mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand h1 mb-0">🎓 学生报修系统</span>
+            <button class="btn btn-outline-danger" onclick="logout()">退出登录</button>
+        </div>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">📝 提交报修单</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">房间号 (三位数字)</label>
+                        <input type="text" id="room" class="form-control" placeholder="例如 101">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">故障描述</label>
+                        <textarea id="desc" class="form-control" rows="3" placeholder="请详细描述故障情况"></textarea>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="submitRepair()">提交报修</button>
+                    <div id="submitMsg" class="mt-2 text-success"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <span>📋 我的报修单</span>
+                    <button class="btn btn-sm btn-light" onclick="loadRepairs()">🔄 刷新</button>
+                </div>
+                <div class="card-body">
+                    <div id="repairsContainer">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const token = localStorage.getItem('token');
+    if (!token) location.href = '/';
+
+    function logout() {
+        localStorage.clear();
+        location.href = '/';
+    }
+
+    async function submitRepair() {
+        const room = document.getElementById('room').value;
+        const description = document.getElementById('desc').value;
+        if (!room || !description) {
+            alert('请填写房间号和故障描述');
+            return;
+        }
+        if (!/^\d{3}$/.test(room)) {
+            alert('房间号必须为三位数字');
+            return;
+        }
+        const res = await fetch('/api/repairs', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ room_number: room, description })
+        });
+        const data = await res.json();
+        document.getElementById('submitMsg').innerText = data.message || (data.error || '提交失败');
+        if (res.ok) {
+            document.getElementById('room').value = '';
+            document.getElementById('desc').value = '';
+            loadRepairs();
+        }
+    }
+
+    async function loadRepairs() {
+        const container = document.getElementById('repairsContainer');
+        container.innerHTML = '<div class="text-center text-muted">加载中...</div>';
+        try {
+            const res = await fetch('/api/repairs', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            if (data.code !== 200 || !data.data) {
+                container.innerHTML = '<div class="alert alert-danger">加载失败</div>';
+                return;
+            }
+            const repairs = data.data;
+            if (repairs.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted">暂无报修记录</div>';
+                return;
+            }
+
+            const table = document.createElement('table');
+            table.className = 'table table-striped table-bordered table-hover';
+            const thead = document.createElement('thead');
+            thead.className = 'table-dark';
+            const headerRow = document.createElement('tr');
+            ['工单ID', '房间号', '故障描述', '状态', '维修工', '评价', '操作'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            for (let r of repairs) {
+                const row = tbody.insertRow();
+                row.insertCell().textContent = r.id;
+                row.insertCell().textContent = r.room;
+                row.insertCell().textContent = r.description;
+                // 状态徽章
+                const statusCell = row.insertCell();
+                let statusText = '', badgeClass = '';
+                if (r.status === 'pending') { statusText = '待分配'; badgeClass = 'bg-warning text-dark'; }
+                else if (r.status === 'processing') { statusText = '处理中'; badgeClass = 'bg-info text-white'; }
+                else if (r.status === 'completed') { statusText = '已完成'; badgeClass = 'bg-success text-white'; }
+                else statusText = r.status;
+                const badge = document.createElement('span');
+                badge.className = `badge ${badgeClass}`;
+                badge.textContent = statusText;
+                statusCell.appendChild(badge);
+
+                // 维修工列：显示 repairman_id 或 未分配
+                const repairmanCell = row.insertCell();
+                repairmanCell.textContent = r.repairman_id ? `维修工ID: ${r.repairman_id}` : '未分配';
+
+                const evalCell = row.insertCell();
+                if (r.evaluation) {
+                    evalCell.textContent = `评分: ${r.evaluation.score}`;
+                } else {
+                    evalCell.textContent = '未评价';
+                }
+
+                const actionCell = row.insertCell();
+                if (r.status === 'completed' && !r.evaluation) {
+                    const evalBtn = document.createElement('button');
+                    evalBtn.textContent = '评价';
+                    evalBtn.className = 'btn btn-sm btn-outline-success';
+                    evalBtn.onclick = () => showEvaluation(r.id);
+                    actionCell.appendChild(evalBtn);
+                }
+                tbody.appendChild(row);
+            }
+            table.appendChild(tbody);
+            container.innerHTML = '';
+            container.appendChild(table);
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = '<div class="alert alert-danger">网络错误</div>';
+        }
+    }
+
+    async function showEvaluation(orderId) {
+        const score = prompt('请输入评分 (1-5)：', '5');
+        if (score === null) return;
+        const scoreNum = parseInt(score);
+        if (isNaN(scoreNum) || scoreNum < 1 || scoreNum > 5) {
+            alert('评分必须为 1-5 之间的整数');
+            return;
+        }
+        const comment = prompt('请输入评价内容（可选）：', '');
+        try {
+            const res = await fetch(`/api/repairs/${orderId}/evaluation`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ score: scoreNum, comment: comment || '' })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert('评价成功');
+                loadRepairs();
+            } else {
+                alert(data.error || '评价失败');
+            }
+        } catch (err) {
+            alert('请求失败');
+        }
+    }
+
+    loadRepairs();
+</script>
+</body>
+</html>

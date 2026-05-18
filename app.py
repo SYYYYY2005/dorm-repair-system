@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from flask_jwt_extended import JWTManager
 from config import Config
 from models import db
@@ -14,6 +14,15 @@ jwt = JWTManager(app)
 
 # 注册蓝图（用户模块）
 app.register_blueprint(auth_bp)
+
+# ==================== 前端静态文件服务 ====================
+@app.route('/')
+def index():
+    return send_from_directory('frontend', 'login.html')
+
+@app.route('/<path:filename>')
+def serve_frontend(filename):
+    return send_from_directory('frontend', filename)
 
 # ==================== 报修模块 ====================
 @app.route('/api/repairs', methods=['POST'])
@@ -44,6 +53,7 @@ def get_repairs():
             "room": o.room_number,
             "description": o.description,
             "status": o.status,
+            "repairman_id": o.repairman_id,      # 返回维修工ID
             "created_at": o.created_at.isoformat()
         } for o in orders]
         return api_response(data=result)
@@ -138,7 +148,6 @@ def create_evaluation(order_id):
     from flask_jwt_extended import get_jwt_identity
     from models import User
     current_user_id = int(get_jwt_identity())
-    # 角色校验：只有学生可以评价
     user = User.query.get(current_user_id)
     if not user or user.role != 'student':
         return api_response(code=403, error="只有学生可以评价")
@@ -147,6 +156,20 @@ def create_evaluation(order_id):
     if error:
         return api_response(code=400, error=error)
     return api_response(data={"id": eval_obj.id}, message="评价成功", code=201)
+
+# ==================== 辅助接口：获取所有维修工 ====================
+@app.route('/api/users/repairmen', methods=['GET'])
+@jwt_required
+def get_repairmen():
+    from models import User
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    user = User.query.get(current_user_id)
+    if not user or user.role != 'admin':
+        return api_response(code=403, error="权限不足")
+    repairmen = User.query.filter_by(role='repairman').all()
+    data = [{"id": r.id, "username": r.username} for r in repairmen]
+    return api_response(data=data)
 
 # ==================== 错误处理 ====================
 @app.errorhandler(404)
