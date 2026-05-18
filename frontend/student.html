@@ -137,18 +137,17 @@
                 badge.className = `badge ${badgeClass}`;
                 badge.textContent = statusText;
                 statusCell.appendChild(badge);
-
-                // 维修工列：显示 repairman_id 或 未分配
+                // 维修工列
                 const repairmanCell = row.insertCell();
                 repairmanCell.textContent = r.repairman_id ? `维修工ID: ${r.repairman_id}` : '未分配';
-
+                // 评价列
                 const evalCell = row.insertCell();
                 if (r.evaluation) {
                     evalCell.textContent = `评分: ${r.evaluation.score}`;
                 } else {
                     evalCell.textContent = '未评价';
                 }
-
+                // 操作列
                 const actionCell = row.insertCell();
                 if (r.status === 'completed' && !r.evaluation) {
                     const evalBtn = document.createElement('button');
@@ -186,7 +185,7 @@
             const data = await res.json();
             if (res.ok) {
                 alert('评价成功');
-                loadRepairs();
+                loadRepairs();  // 刷新列表，重新显示评价信息
             } else {
                 alert(data.error || '评价失败');
             }

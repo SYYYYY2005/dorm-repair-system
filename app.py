@@ -45,17 +45,25 @@ def create_repair():
 @jwt_required
 def get_repairs():
     from flask_jwt_extended import get_jwt_identity
+    from models import Evaluation
     current_user_id = int(get_jwt_identity())
     try:
         orders = RepairService.get_repairs_by_student(current_user_id)
-        result = [{
-            "id": o.id,
-            "room": o.room_number,
-            "description": o.description,
-            "status": o.status,
-            "repairman_id": o.repairman_id,      # 返回维修工ID
-            "created_at": o.created_at.isoformat()
-        } for o in orders]
+        result = []
+        for o in orders:
+            evaluation = Evaluation.query.filter_by(order_id=o.id).first()
+            eval_data = None
+            if evaluation:
+                eval_data = {"score": evaluation.score, "comment": evaluation.comment}
+            result.append({
+                "id": o.id,
+                "room": o.room_number,
+                "description": o.description,
+                "status": o.status,
+                "repairman_id": o.repairman_id,
+                "evaluation": eval_data,
+                "created_at": o.created_at.isoformat()
+            })
         return api_response(data=result)
     except Exception as e:
         app.logger.error(f"获取报修列表失败: {e}")
@@ -66,27 +74,34 @@ def get_repairs():
 @jwt_required
 def get_assigned_repairs():
     from flask_jwt_extended import get_jwt_identity
+    from models import User, Evaluation
     current_user_id = int(get_jwt_identity())
-    from models import User
     user = User.query.get(current_user_id)
     if not user or user.role != 'repairman':
         return api_response(code=403, error="权限不足")
     orders = RepairService.get_repairs_for_repairman(current_user_id)
-    result = [{
-        "id": o.id,
-        "room": o.room_number,
-        "description": o.description,
-        "status": o.status,
-        "created_at": o.created_at.isoformat()
-    } for o in orders]
+    result = []
+    for o in orders:
+        evaluation = Evaluation.query.filter_by(order_id=o.id).first()
+        eval_data = None
+        if evaluation:
+            eval_data = {"score": evaluation.score, "comment": evaluation.comment}
+        result.append({
+            "id": o.id,
+            "room": o.room_number,
+            "description": o.description,
+            "status": o.status,
+            "created_at": o.created_at.isoformat(),
+            "evaluation": eval_data
+        })
     return api_response(data=result)
 
 @app.route('/api/repairs/all', methods=['GET'])
 @jwt_required
 def get_all_repairs():
     from flask_jwt_extended import get_jwt_identity
-    current_user_id = int(get_jwt_identity())
     from models import User
+    current_user_id = int(get_jwt_identity())
     user = User.query.get(current_user_id)
     if not user or user.role != 'admin':
         return api_response(code=403, error="权限不足")
@@ -139,6 +154,10 @@ def assign_repair_order(order_id):
     order, error = RepairService.assign_repair_order(order_id, current_user_id, repairman_id)
     if error:
         return api_response(code=400, error=error)
+    # 分配成功后，将工单状态改为 processing
+    if order:
+        order.status = 'processing'
+        db.session.commit()
     return api_response(message="分配成功")
 
 # ==================== 评价模块 ====================
