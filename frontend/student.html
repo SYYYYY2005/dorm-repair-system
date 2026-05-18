@@ -5,196 +5,238 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>学生端 - 宿舍报修系统</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { background: #f0f2f5; }
-        .container { max-width: 1200px; margin-top: 20px; }
-        .status-badge { padding: 3px 8px; border-radius: 20px; font-size: 0.8rem; font-weight: normal; }
+        body { background: #f4f6f9; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .sidebar { background: #2c3e66; min-height: 100vh; color: white; }
+        .sidebar .nav-link { color: #e0e0e0; padding: 0.8rem 1.5rem; border-radius: 0.5rem; margin: 0.2rem 0; transition: 0.2s; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background: #1e2a4a; color: white; }
+        .sidebar .nav-link i { width: 24px; margin-right: 10px; }
+        .card { border: none; border-radius: 1rem; box-shadow: 0 0 15px rgba(0,0,0,0.05); }
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; }
         .status-pending { background-color: #ffc107; color: #000; }
         .status-processing { background-color: #17a2b8; color: #fff; }
         .status-completed { background-color: #28a745; color: #fff; }
-        .table th { background-color: #343a40; color: white; }
+        .stats-card { background: white; border-radius: 0.8rem; padding: 1rem; text-align: center; transition: transform 0.2s; cursor: pointer; }
+        .stats-card:hover { transform: translateY(-5px); background: #e9ecef; }
+        .filter-bar { gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; }
+        .filter-item { min-width: 130px; }
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 1050; }
+        .skeleton { background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; border-radius: 4px; height: 40px; margin: 10px 0; }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .user-info { background: #fff; padding: 4px 12px; border-radius: 30px; font-size: 0.9rem; }
+        .table-row-clickable { cursor: pointer; transition: background 0.1s; }
+        .table-row-clickable:hover { background: #f1f3f5 !important; }
     </style>
 </head>
 <body>
-<div class="container">
-    <nav class="navbar navbar-light bg-light shadow-sm rounded mb-4">
-        <div class="container-fluid">
-            <span class="navbar-brand h1 mb-0">🎓 学生报修系统</span>
-            <button class="btn btn-outline-danger" onclick="logout()">退出登录</button>
+<div class="toast-container" id="toastContainer"></div>
+<div class="container-fluid p-0">
+    <div class="row g-0">
+        <div class="col-md-3 col-lg-2 sidebar p-3">
+            <div class="text-center mb-4"><i class="fas fa-tools fa-2x"></i><h5 class="mt-2">宿舍报修</h5><span class="badge bg-light text-dark mt-1">学生端</span></div>
+            <ul class="nav flex-column">
+                <li class="nav-item"><a class="nav-link active" id="nav-submit" href="#" onclick="switchTab('submit')"><i class="fas fa-plus-circle"></i> 提交报修</a></li>
+                <li class="nav-item"><a class="nav-link" id="nav-list" href="#" onclick="switchTab('list')"><i class="fas fa-list-ul"></i> 我的报修单</a></li>
+            </ul>
+            <hr class="bg-light"><button class="btn btn-outline-light w-100" onclick="logout()"><i class="fas fa-sign-out-alt"></i> 退出登录</button>
         </div>
-    </nav>
-
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">📝 提交报修单</div>
+        <div class="col-md-9 col-lg-10 p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3><i class="fas fa-graduation-cap me-2"></i>学生工作台</h3>
+                <div class="user-info"><i class="fas fa-user-circle me-1"></i><span id="userName">学生</span></div>
+            </div>
+            <!-- 统计卡片 -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-4"><div class="stats-card" onclick="quickFilter('pending')"><h5>待处理</h5><h2 class="text-warning" id="pendingCount">0</h2></div></div>
+                <div class="col-md-4"><div class="stats-card" onclick="quickFilter('processing')"><h5>处理中</h5><h2 class="text-info" id="processingCount">0</h2></div></div>
+                <div class="col-md-4"><div class="stats-card" onclick="quickFilter('completed')"><h5>已完成</h5><h2 class="text-success" id="completedCount">0</h2></div></div>
+            </div>
+            <!-- 提交面板 -->
+            <div id="submitPanel" class="card">
+                <div class="card-header bg-white fw-bold"><i class="fas fa-edit me-2"></i>提交报修单</div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">房间号 (三位数字)</label>
-                        <input type="text" id="room" class="form-control" placeholder="例如 101">
+                    <div class="mb-3"><label class="form-label">房间号 <span class="text-muted small">(三位数字)</span></label>
+                        <input type="text" id="room" class="form-control" placeholder="例如 101" oninput="validateRoom(this)">
+                        <div id="roomFeedback" class="invalid-feedback d-none">房间号必须为三位数字</div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">故障描述</label>
-                        <textarea id="desc" class="form-control" rows="3" placeholder="请详细描述故障情况"></textarea>
-                    </div>
-                    <button class="btn btn-primary w-100" onclick="submitRepair()">提交报修</button>
-                    <div id="submitMsg" class="mt-2 text-success"></div>
+                    <div class="mb-3"><label class="form-label">故障描述</label><textarea id="desc" class="form-control" rows="3" placeholder="请详细描述故障情况"></textarea></div>
+                    <button class="btn btn-primary" onclick="submitRepair()"><i class="fas fa-paper-plane"></i> 提交报修</button>
                 </div>
             </div>
-        </div>
-        <div class="col-md-8">
-            <div class="card shadow-sm">
-                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-                    <span>📋 我的报修单</span>
-                    <button class="btn btn-sm btn-light" onclick="loadRepairs()">🔄 刷新</button>
+            <!-- 报修列表面板 -->
+            <div id="listPanel" class="card" style="display:none;">
+                <div class="card-header bg-white">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap">
+                        <span><i class="fas fa-table me-2"></i>我的报修单</span>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" onclick="applyFilter()">查询</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="resetFilter()">重置</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadRepairs()"><i class="fas fa-sync-alt"></i> 刷新</button>
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="row g-2 filter-bar">
+                        <div class="col-auto filter-item"><label>工单ID</label><input type="text" id="filterId" class="form-control form-control-sm" placeholder="工单ID"></div>
+                        <div class="col-auto filter-item"><label>房间号</label><input type="text" id="filterRoom" class="form-control form-control-sm" placeholder="房间号"></div>
+                        <div class="col-auto filter-item"><label>状态</label><select id="filterStatus" class="form-select form-select-sm"><option value="">全部</option><option value="pending">待分配</option><option value="processing">处理中</option><option value="completed">已完成</option></select></div>
+                        <div class="col-auto filter-item"><label>维修工ID</label><input type="text" id="filterRepairmanId" class="form-control form-control-sm" placeholder="维修工ID"></div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div id="repairsContainer">加载中...</div>
+                <div class="card-body p-0">
+                    <div id="repairsContainer" class="p-3">加载中...</div>
                 </div>
+                <div class="card-footer bg-white" id="paginationFooter"></div>
             </div>
         </div>
     </div>
 </div>
-
+<!-- 详情模态框（优化版） -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-clipboard-list me-2"></i>工单详情</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="modalContent">
+                <div class="text-muted text-center">加载中...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     const token = localStorage.getItem('token');
     if (!token) location.href = '/';
+    let allRepairs = [], filteredRepairs = [], currentPage = 1, pageSize = 5;
 
-    function logout() {
-        localStorage.clear();
-        location.href = '/';
+    function showToast(msg, type='success') {
+        const cont = document.getElementById('toastContainer');
+        const html = `<div class="toast align-items-center text-white bg-${type} border-0" role="alert"><div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
+        cont.insertAdjacentHTML('beforeend', html);
+        const el = cont.lastElementChild;
+        new bootstrap.Toast(el, { autohide: true, delay: 2000 }).show();
+        el.addEventListener('hidden.bs.toast', () => el.remove());
     }
-
+    function logout() { localStorage.clear(); location.href = '/'; }
+    function validateRoom(input) { const reg = /^\d{3}$/; input.classList.toggle('is-invalid', !reg.test(input.value)); document.getElementById('roomFeedback').classList.toggle('d-none', reg.test(input.value)); }
+    function quickFilter(status) { document.getElementById('filterStatus').value = status; applyFilter(); switchTab('list'); }
+    function switchTab(tab) {
+        document.getElementById('nav-submit').classList.toggle('active', tab==='submit');
+        document.getElementById('nav-list').classList.toggle('active', tab==='list');
+        document.getElementById('submitPanel').style.display = tab==='submit' ? 'block' : 'none';
+        document.getElementById('listPanel').style.display = tab==='list' ? 'block' : 'none';
+        if (tab==='list') loadRepairs();
+    }
     async function submitRepair() {
-        const room = document.getElementById('room').value;
-        const description = document.getElementById('desc').value;
-        if (!room || !description) {
-            alert('请填写房间号和故障描述');
-            return;
-        }
-        if (!/^\d{3}$/.test(room)) {
-            alert('房间号必须为三位数字');
-            return;
-        }
+        const room = document.getElementById('room').value, desc = document.getElementById('desc').value;
+        if (!room || !desc) return showToast('请填写完整', 'danger');
+        if (!/^\d{3}$/.test(room)) return showToast('房间号必须三位数字', 'danger');
         const res = await fetch('/api/repairs', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ room_number: room, description })
+            method:'POST', headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+            body:JSON.stringify({room_number:room, description:desc})
         });
         const data = await res.json();
-        document.getElementById('submitMsg').innerText = data.message || (data.error || '提交失败');
-        if (res.ok) {
-            document.getElementById('room').value = '';
-            document.getElementById('desc').value = '';
-            loadRepairs();
-        }
+        if(res.ok) { showToast('提交成功','success'); document.getElementById('room').value=''; document.getElementById('desc').value=''; switchTab('list'); }
+        else showToast(data.error||'失败','danger');
     }
-
     async function loadRepairs() {
-        const container = document.getElementById('repairsContainer');
-        container.innerHTML = '<div class="text-center text-muted">加载中...</div>';
+        const cont = document.getElementById('repairsContainer');
+        cont.innerHTML = '<div class="skeleton" style="height:60px"></div><div class="skeleton"></div><div class="skeleton"></div>';
         try {
-            const res = await fetch('/api/repairs', { headers: { 'Authorization': `Bearer ${token}` } });
+            const res = await fetch('/api/repairs', {headers:{'Authorization':`Bearer ${token}`}});
             const data = await res.json();
-            if (data.code !== 200 || !data.data) {
-                container.innerHTML = '<div class="alert alert-danger">加载失败</div>';
-                return;
-            }
-            const repairs = data.data;
-            if (repairs.length === 0) {
-                container.innerHTML = '<div class="text-center text-muted">暂无报修记录</div>';
-                return;
-            }
-
-            const table = document.createElement('table');
-            table.className = 'table table-striped table-bordered table-hover';
-            const thead = document.createElement('thead');
-            thead.className = 'table-dark';
-            const headerRow = document.createElement('tr');
-            ['工单ID', '房间号', '故障描述', '状态', '维修工', '评价', '操作'].forEach(text => {
-                const th = document.createElement('th');
-                th.textContent = text;
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            table.appendChild(thead);
-
-            const tbody = document.createElement('tbody');
-            for (let r of repairs) {
-                const row = tbody.insertRow();
-                row.insertCell().textContent = r.id;
-                row.insertCell().textContent = r.room;
-                row.insertCell().textContent = r.description;
-                // 状态徽章
-                const statusCell = row.insertCell();
-                let statusText = '', badgeClass = '';
-                if (r.status === 'pending') { statusText = '待分配'; badgeClass = 'bg-warning text-dark'; }
-                else if (r.status === 'processing') { statusText = '处理中'; badgeClass = 'bg-info text-white'; }
-                else if (r.status === 'completed') { statusText = '已完成'; badgeClass = 'bg-success text-white'; }
-                else statusText = r.status;
-                const badge = document.createElement('span');
-                badge.className = `badge ${badgeClass}`;
-                badge.textContent = statusText;
-                statusCell.appendChild(badge);
-                // 维修工列
-                const repairmanCell = row.insertCell();
-                repairmanCell.textContent = r.repairman_id ? `维修工ID: ${r.repairman_id}` : '未分配';
-                // 评价列
-                const evalCell = row.insertCell();
-                if (r.evaluation) {
-                    evalCell.textContent = `评分: ${r.evaluation.score}`;
-                } else {
-                    evalCell.textContent = '未评价';
-                }
-                // 操作列
-                const actionCell = row.insertCell();
-                if (r.status === 'completed' && !r.evaluation) {
-                    const evalBtn = document.createElement('button');
-                    evalBtn.textContent = '评价';
-                    evalBtn.className = 'btn btn-sm btn-outline-success';
-                    evalBtn.onclick = () => showEvaluation(r.id);
-                    actionCell.appendChild(evalBtn);
-                }
-                tbody.appendChild(row);
-            }
-            table.appendChild(tbody);
-            container.innerHTML = '';
-            container.appendChild(table);
-        } catch (err) {
-            console.error(err);
-            container.innerHTML = '<div class="alert alert-danger">网络错误</div>';
-        }
+            if(data.code!==200) throw new Error();
+            allRepairs = data.data;
+            document.getElementById('userName').innerText = allRepairs.length ? '学生' : '学生';
+            updateStats();
+            resetFilter();
+        } catch(e) { cont.innerHTML='<div class="alert alert-danger">加载失败</div>'; }
     }
-
+    function updateStats() {
+        document.getElementById('pendingCount').innerText = allRepairs.filter(r=>r.status==='pending').length;
+        document.getElementById('processingCount').innerText = allRepairs.filter(r=>r.status==='processing').length;
+        document.getElementById('completedCount').innerText = allRepairs.filter(r=>r.status==='completed').length;
+    }
+    function applyFilter() {
+        const id = document.getElementById('filterId').value.trim();
+        const room = document.getElementById('filterRoom').value.trim().toLowerCase();
+        const status = document.getElementById('filterStatus').value;
+        const repair = document.getElementById('filterRepairmanId').value.trim();
+        filteredRepairs = allRepairs.filter(r => (!id || String(r.id).includes(id)) && (!room || r.room.toLowerCase().includes(room)) && (!status || r.status===status) && (!repair || (r.repairman_id && String(r.repairman_id).includes(repair))));
+        currentPage=1; renderRepairs();
+    }
+    function resetFilter() {
+        document.getElementById('filterId').value=''; document.getElementById('filterRoom').value='';
+        document.getElementById('filterStatus').value=''; document.getElementById('filterRepairmanId').value='';
+        filteredRepairs=[...allRepairs]; currentPage=1; renderRepairs();
+    }
+    function renderRepairs() {
+        const start=(currentPage-1)*pageSize, pageData=filteredRepairs.slice(start,start+pageSize);
+        const cont=document.getElementById('repairsContainer');
+        if(!pageData.length) { cont.innerHTML='<div class="text-center text-muted py-5"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>暂无报修记录</div>'; document.getElementById('paginationFooter').innerHTML=''; return; }
+        let html='<table class="table table-hover align-middle"><thead class="table-light"><tr><th>ID</th><th>房间号</th><th>描述</th><th>状态</th><th>维修工</th><th>评价</th><th>操作</th></tr></thead><tbody>';
+        for(let r of pageData) {
+            let statusClass=r.status==='pending'?'status-pending':r.status==='processing'?'status-processing':'status-completed';
+            let statusText=r.status==='pending'?'待分配':r.status==='processing'?'处理中':'已完成';
+            let evalHtml=r.evaluation?`评分: ${r.evaluation.score}<br><small>${escapeHtml(r.evaluation.comment||'')}</small>`:'未评价';
+            let actionHtml=(r.status==='completed' && !r.evaluation)?`<button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); showEvaluation(${r.id})">评价</button>`:'';
+            html+=`<tr class="table-row-clickable" onclick="showDetail(${r.id})">
+                        <td>${escapeHtml(r.id)}</td><td>${escapeHtml(r.room)}</td><td>${escapeHtml(r.description)}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td>${r.repairman_id?`ID: ${r.repairman_id}`:'未分配'}</td>
+                        <td>${evalHtml}</td>
+                        <td onclick="event.stopPropagation()">${actionHtml}</td>
+                    </tr>`;
+        }
+        html+='</tbody></table>';
+        cont.innerHTML=html;
+        const totalPages=Math.ceil(filteredRepairs.length/pageSize);
+        let pg='<nav><ul class="pagination pagination-sm justify-content-center">';
+        for(let i=1;i<=totalPages;i++) pg+=`<li class="page-item ${i===currentPage?'active':''}"><button class="page-link" onclick="goToPage(${i})">${i}</button></li>`;
+        pg+='</ul></nav>';
+        document.getElementById('paginationFooter').innerHTML=totalPages>1?pg:'';
+    }
+    function goToPage(p){currentPage=p; renderRepairs();}
+    function escapeHtml(s){if(!s) return ''; return String(s).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
     async function showEvaluation(orderId) {
         const score = prompt('请输入评分 (1-5)：', '5');
-        if (score === null) return;
-        const scoreNum = parseInt(score);
-        if (isNaN(scoreNum) || scoreNum < 1 || scoreNum > 5) {
-            alert('评分必须为 1-5 之间的整数');
-            return;
-        }
-        const comment = prompt('请输入评价内容（可选）：', '');
-        try {
-            const res = await fetch(`/api/repairs/${orderId}/evaluation`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ score: scoreNum, comment: comment || '' })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                alert('评价成功');
-                loadRepairs();  // 刷新列表，重新显示评价信息
-            } else {
-                alert(data.error || '评价失败');
-            }
-        } catch (err) {
-            alert('请求失败');
-        }
+        if(!score) return;
+        const num=parseInt(score);
+        if(isNaN(num)||num<1||num>5) return showToast('评分1-5','danger');
+        const comment = prompt('评价内容（可选）：','');
+        if(!confirm('确认提交评价？')) return;
+        const res = await fetch(`/api/repairs/${orderId}/evaluation`, {
+            method:'POST', headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+            body:JSON.stringify({score:num, comment:comment||''})
+        });
+        const data=await res.json();
+        if(res.ok){ showToast('评价成功','success'); loadRepairs(); }
+        else showToast(data.error||'失败','danger');
     }
-
-    loadRepairs();
+    async function showDetail(orderId) {
+        const repair = allRepairs.find(r => r.id == orderId);
+        if (!repair) return;
+        let statusText = '', statusBadge = '';
+        if (repair.status === 'pending') { statusText = '待分配'; statusBadge = 'bg-warning text-dark'; }
+        else if (repair.status === 'processing') { statusText = '处理中'; statusBadge = 'bg-info text-white'; }
+        else { statusText = '已完成'; statusBadge = 'bg-success text-white'; }
+        const modalBody = document.getElementById('modalContent');
+        modalBody.innerHTML = `
+            <div class="row mb-3"><div class="col-4 fw-bold"><i class="fas fa-hashtag text-secondary"></i> 工单ID：</div><div class="col-8">${escapeHtml(repair.id)}</div></div>
+            <div class="row mb-3"><div class="col-4 fw-bold"><i class="fas fa-door-open text-secondary"></i> 房间号：</div><div class="col-8">${escapeHtml(repair.room)}</div></div>
+            <div class="row mb-3"><div class="col-4 fw-bold"><i class="fas fa-align-left text-secondary"></i> 故障描述：</div><div class="col-8">${escapeHtml(repair.description)}</div></div>
+            <div class="row mb-3"><div class="col-4 fw-bold"><i class="fas fa-chart-line text-secondary"></i> 状态：</div><div class="col-8"><span class="badge ${statusBadge} px-3 py-2">${statusText}</span></div></div>
+            <div class="row mb-3"><div class="col-4 fw-bold"><i class="fas fa-user-cog text-secondary"></i> 维修工：</div><div class="col-8">${repair.repairman_id ? `ID: ${repair.repairman_id}` : '<span class="text-muted">未分配</span>'}</div></div>
+            <div class="row mb-3"><div class="col-4 fw-bold"><i class="fas fa-star text-secondary"></i> 评价：</div><div class="col-8">${repair.evaluation ? `评分: ${repair.evaluation.score}<br>评论：${escapeHtml(repair.evaluation.comment||'')}` : '<span class="text-muted">暂无评价</span>'}</div></div>
+        `;
+        new bootstrap.Modal(document.getElementById('detailModal')).show();
+    }
+    loadRepairs(); switchTab('submit');
 </script>
 </body>
 </html>

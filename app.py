@@ -100,22 +100,29 @@ def get_assigned_repairs():
 @jwt_required
 def get_all_repairs():
     from flask_jwt_extended import get_jwt_identity
-    from models import User
+    from models import User, Evaluation
     current_user_id = int(get_jwt_identity())
     user = User.query.get(current_user_id)
     if not user or user.role != 'admin':
         return api_response(code=403, error="权限不足")
     status = request.args.get('status')
     orders = RepairService.get_all_repairs(status)
-    result = [{
-        "id": o.id,
-        "student_id": o.student_id,
-        "room": o.room_number,
-        "description": o.description,
-        "status": o.status,
-        "repairman_id": o.repairman_id,
-        "created_at": o.created_at.isoformat()
-    } for o in orders]
+    result = []
+    for o in orders:
+        evaluation = Evaluation.query.filter_by(order_id=o.id).first()
+        eval_data = None
+        if evaluation:
+            eval_data = {"score": evaluation.score, "comment": evaluation.comment}
+        result.append({
+            "id": o.id,
+            "student_id": o.student_id,
+            "room": o.room_number,
+            "description": o.description,
+            "status": o.status,
+            "repairman_id": o.repairman_id,
+            "evaluation": eval_data,
+            "created_at": o.created_at.isoformat()
+        })
     return api_response(data=result)
 
 @app.route('/api/repairs/<int:order_id>/status', methods=['PUT'])
@@ -142,12 +149,12 @@ def update_repair_status(order_id):
 @jwt_required
 def assign_repair_order(order_id):
     from flask_jwt_extended import get_jwt_identity
+    from models import User, RepairOrder
     current_user_id = int(get_jwt_identity())
     data = request.get_json()
     repairman_id = data.get('repairman_id')
     if not repairman_id:
         return api_response(code=400, error="缺少repairman_id")
-    from models import User
     user = User.query.get(current_user_id)
     if not user or user.role != 'admin':
         return api_response(code=403, error="权限不足")
@@ -155,8 +162,9 @@ def assign_repair_order(order_id):
     if error:
         return api_response(code=400, error=error)
     # 分配成功后，将工单状态改为 processing
-    if order:
-        order.status = 'processing'
+    order_obj = RepairOrder.query.get(order_id)
+    if order_obj and order_obj.status == 'pending':
+        order_obj.status = 'processing'
         db.session.commit()
     return api_response(message="分配成功")
 
