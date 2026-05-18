@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><title>测试</title></head>
+<body>
+<div id="ordersList">加载中...</div>
+<script>
+    const token = localStorage.getItem('token');
+    if (!token) alert('请先登录');
+    fetch('/api/repairs/all', {headers: {'Authorization': `Bearer ${token}`}})
+        .then(res => res.json())
+        .then(data => {
+            let html = '<table border="1">';
+            data.data.forEach(o => {
+                html += `<tr><td>${o.id}</td><td>${o.student_id}</td><td>${o.room}</td><td>${o.description}</td><td>${o.status}</td><td>${o.repairman_id || ''}</td></tr>`;
+            });
+            html += '</table>';
+            document.getElementById('ordersList').innerHTML = html;
+        });
+</script>
+</body>
+</html>
