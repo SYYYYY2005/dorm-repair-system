@@ -177,3 +177,21 @@ def test_evaluation_negative_score(client):
     # 预期应返回 400 错误（评分无效）
     assert res.status_code == 400
     assert '评分' in res.json.get('error', '') and ('1-5' in res.json.get('error', '') or '必须' in res.json.get('error', ''))
+
+
+def test_evaluation_nonexistent_order(client):
+    """测试评价不存在的工单"""
+    # 1. 注册学生
+    client.post('/api/register', json={'username':'stu4','password':'123','role':'student'})
+    
+    # 2. 学生登录
+    res = client.post('/api/login', json={'username':'stu4','password':'123'})
+    assert res.status_code == 200
+    token = res.json['access_token']
+    
+    # 3. 尝试评价不存在的工单（id=99999）
+    res = client.post('/api/repairs/99999/evaluation', 
+                      headers={'Authorization': f'Bearer {token}'},
+                      json={'score': 5, 'comment': 'good'})
+    assert res.status_code in [400, 404]
+    assert '不存在' in res.json.get('error', '')
