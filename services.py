@@ -104,6 +104,9 @@ class RepairService:
 class EvaluationService:
     @staticmethod
     def create_evaluation(order_id, student_id, data):
+        score = data.get('score')
+        if not isinstance(score, int) or score < 1 or score > 5:
+           return None, "评分必须为 1-5 之间的整数"
         from models import RepairOrder
         order = RepairOrder.query.get(order_id)
         if not order or order.student_id != student_id:
