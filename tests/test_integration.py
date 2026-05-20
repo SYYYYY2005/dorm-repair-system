@@ -133,3 +133,18 @@ def test_duplicate_evaluation(client):
                       json={'score':4,'comment':'again'})
     assert res.status_code == 400
     assert '已评价' in res.json['error']
+def test_evaluation_negative_score(client):
+    # 复用 test_full_flow 中创建的用户 stu, rep, adm 和工单 id=1（如果存在）
+    # 先确保工单已完成（假设 test_full_flow 已经将其设为 completed）
+    # 登录学生
+    res = client.post('/api/login', json={'username':'stu','password':'123'})
+    assert res.status_code == 200, "学生登录失败"
+    token = res.json['access_token']
+    # 尝试评价工单 id=1，评分为 -1（负数）
+    res = client.post('/api/repairs/1/evaluation', 
+                      headers={'Authorization': f'Bearer {token}'},
+                      json={'score': -1, 'comment': 'bad'})
+    # 预期应返回 400 错误（评分无效）
+    assert res.status_code == 400
+    # 检查错误信息包含相关关键词
+    assert '评分' in res.json.get('error', '') and ('1-5' in res.json.get('error', '') or '必须' in res.json.get('error', ''))
